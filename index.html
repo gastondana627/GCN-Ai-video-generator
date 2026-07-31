@@ -1,935 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GCN AI — Video Generation</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-
-        :root {
-            --bg-base: #07080f;
-            --bg-surface: #0d0f1a;
-            --bg-elevated: #131624;
-            --border: rgba(255,255,255,0.07);
-            --border-hover: rgba(255,255,255,0.14);
-            --accent: #6366f1;
-            --accent-2: #8b5cf6;
-            --text-muted: #6b7280;
-            --text-dim: #9ca3af;
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg-base);
-            color: #e5e7eb;
-            min-height: 100vh;
-        }
-
-        /* Subtle noise texture overlay */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        .logo-font { font-family: 'Space Grotesk', sans-serif; }
-
-        /* Nav */
-        nav {
-            background: rgba(7, 8, 15, 0.85);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            z-index: 50;
-        }
-
-        /* Card / panel style */
-        .panel {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-        }
-
-        .panel-elevated {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-        }
-
-        /* Inputs */
-        textarea, input[type="text"], input[type="number"], select {
-            background: var(--bg-base);
-            border: 1px solid var(--border);
-            color: #e5e7eb;
-            border-radius: 10px;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            outline: none;
-            width: 100%;
-        }
-        textarea:focus, input[type="text"]:focus, input[type="number"]:focus, select:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-        }
-        select option { background: #131624; }
-
-        /* Drop zone */
-        .drop-zone {
-            border: 1.5px dashed rgba(255,255,255,0.12);
-            border-radius: 12px;
-            transition: all 0.25s;
-            cursor: pointer;
-        }
-        .drop-zone:hover { border-color: var(--accent); background: rgba(99,102,241,0.04); }
-        .drop-zone.dragover {
-            border-color: var(--accent);
-            background: rgba(99,102,241,0.08);
-        }
-
-        /* Model cards */
-        .model-card {
-            border: 1.5px solid var(--border);
-            border-radius: 12px;
-            padding: 14px 16px;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: var(--bg-base);
-            position: relative;
-        }
-        .model-card:hover { border-color: var(--border-hover); }
-        .model-card.selected {
-            border-color: var(--accent);
-            background: rgba(99, 102, 241, 0.06);
-        }
-        .model-card .badge {
-            font-size: 10px;
-            font-weight: 600;
-            letter-spacing: 0.04em;
-            padding: 2px 7px;
-            border-radius: 99px;
-        }
-
-        /* Ratio buttons */
-        .ratio-btn {
-            border: 1.5px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg-base);
-            color: var(--text-dim);
-            font-size: 12px;
-            font-weight: 500;
-            padding: 8px 10px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: center;
-        }
-        .ratio-btn:hover { border-color: var(--border-hover); color: #e5e7eb; }
-        .ratio-btn.selected { border-color: var(--accent); color: #e5e7eb; background: rgba(99,102,241,0.08); }
-        .ratio-rect { background: #4b5563; transition: background 0.2s; }
-        .ratio-btn.selected .ratio-rect { background: #818cf8; }
-
-        /* Duration pills */
-        .dur-btn {
-            border: 1.5px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg-base);
-            color: var(--text-dim);
-            font-size: 13px;
-            font-weight: 500;
-            padding: 7px 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-            flex: 1;
-            text-align: center;
-        }
-        .dur-btn:hover { border-color: var(--border-hover); color: #e5e7eb; }
-        .dur-btn.selected { border-color: var(--accent); color: #e5e7eb; background: rgba(99,102,241,0.08); }
-
-        /* Slider */
-        input[type=range] {
-            -webkit-appearance: none;
-            appearance: none;
-            height: 4px;
-            background: var(--border);
-            border-radius: 99px;
-            width: 100%;
-            border: none;
-            outline: none;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: var(--accent);
-            cursor: pointer;
-            box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
-        }
-
-        /* Generate button */
-        .gen-btn {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            border: none;
-            border-radius: 12px;
-            color: #fff;
-            font-weight: 600;
-            font-size: 15px;
-            letter-spacing: 0.01em;
-            cursor: pointer;
-            transition: all 0.2s;
-            width: 100%;
-            padding: 16px;
-            position: relative;
-            overflow: hidden;
-        }
-        .gen-btn::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
-        }
-        .gen-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(99,102,241,0.35); }
-        .gen-btn:active { transform: translateY(0); }
-        .gen-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
-
-        /* Tab active */
-        .tab-btn {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-muted);
-            padding: 6px 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            background: transparent;
-        }
-        .tab-btn.active { color: #e5e7eb; background: var(--bg-elevated); }
-        .tab-btn:hover:not(.active) { color: var(--text-dim); }
-
-        /* Progress bar */
-        .progress-bar {
-            height: 2px;
-            background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4);
-            border-radius: 99px;
-            transition: width 0.4s ease;
-        }
-
-        /* Video */
-        video {
-            width: 100%;
-            max-height: 380px;
-            border-radius: 12px;
-            background: #000;
-            display: block;
-        }
-
-        /* Placeholder gen cards */
-        .gen-card {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            aspect-ratio: 16/9;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Collapsible */
-        .collapsible-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-        .collapsible-content.open { max-height: 600px; }
-
-        /* Status dot */
-        @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
-        .status-dot { animation: pulse-dot 2s infinite; }
-
-        /* Spin */
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin 0.9s linear infinite; }
-
-        /* Section label */
-        .section-label {
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
-
-        /* Bouncing nugget */
-        #bouncing-nugget {
-            position: absolute;
-            width: 100px;
-            height: 100px;
-            object-fit: contain;
-            opacity: 0;
-            pointer-events: none;
-            z-index: 10;
-            will-change: transform, opacity, left, top;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GCN AI — Control Deck</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">◉</div>
+        <span>GCN AI · Control Deck</span>
+      </div>
+      <div class="status-pill">Copper Render / Night Shift</div>
+    </header>
 
-    <!-- NAV -->
-    <nav class="px-6 py-3">
-        <div class="max-w-6xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
-                    <svg width="22" height="22" viewBox="0 0 44 50" fill="none">
-                        <path d="M22 3.5 Q25.5 2.5 28.5 4 Q31 3.5 33 5.5 Q35.5 6 36.5 8.5 Q39 10 38.5 13 Q40.5 15.5 40 19 Q41.5 22 40 25 Q40.5 28.5 38 31 Q37 33.5 34.5 35 Q32 37 29 37.5 Q26 38.5 22 38.5 Q18 38.5 15 37.5 Q12 37 9.5 35 Q7 33.5 6 31 Q3.5 28.5 4 25 Q2.5 22 4 19 Q3.5 15.5 5.5 13 Q5 10 7.5 8.5 Q8.5 6 11 5.5 Q13 3.5 15.5 4 Q18.5 2.5 22 3.5Z" fill="rgba(251,191,36,0.25)" stroke="rgba(251,191,36,0.95)" stroke-width="1.6"/>
-                        <path d="M5 21 Q0.5 20 0.5 23 Q1 26 5.5 25.5" stroke="rgba(251,191,36,0.95)" stroke-width="1.5" stroke-linecap="round"/>
-                        <path d="M39 21 Q43.5 20 43.5 23 Q43 26 38.5 25.5" stroke="rgba(251,191,36,0.95)" stroke-width="1.5" stroke-linecap="round"/>
-                        <path d="M16 38 Q14.5 42.5 16 46.5 Q17 48 19 47.5 Q17.5 44 18.5 39" stroke="rgba(251,191,36,0.95)" stroke-width="1.6" stroke-linecap="round"/>
-                        <path d="M28 38 Q29.5 42.5 28 46.5 Q27 48 25 47.5 Q26.5 44 25.5 39" stroke="rgba(251,191,36,0.95)" stroke-width="1.6" stroke-linecap="round"/>
-                        <circle cx="16.5" cy="16.5" r="4.5" fill="white"/>
-                        <circle cx="17.5" cy="17.2" r="2" fill="#1a1a2e"/>
-                        <circle cx="27.5" cy="16.5" r="4.5" fill="white"/>
-                        <circle cx="28.5" cy="17.2" r="2" fill="#1a1a2e"/>
-                    </svg>
-                </div>
-                <span class="logo-font font-semibold text-white text-base tracking-tight">GCN AI</span>
-            </div>
-        </div>
-    </nav>
-
-    <!-- MAIN LAYOUT -->
-    <div class="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-6" style="position: relative; z-index: 1;">
-
-        <!-- LEFT PANEL: Controls -->
-        <div class="w-full md:max-w-sm md:flex-shrink-0 flex flex-col gap-4">
-
-            <!-- Mode Tabs -->
-            <div class="panel p-1.5 flex gap-1">
-                <button class="tab-btn active flex-1" onclick="switchTab('text')">Text to Video</button>
-                <button class="tab-btn flex-1" onclick="switchTab('image')">Image to Video</button>
-            </div>
-
-            <!-- Prompt -->
-            <div class="panel p-4">
-                <p class="section-label">Prompt</p>
-                <textarea id="prompt-input" rows="4"
-                    class="p-3 text-sm resize-none placeholder-gray-600"
-                    placeholder="A man dancing in 80's clothing looking and sounding remarkably white..."></textarea>
-            </div>
-
-            <!-- Image Upload (hidden by default, shown in image tab) -->
-            <div id="image-panel" class="panel p-4 hidden">
-                <p class="section-label">Reference Image</p>
-                <div id="drop-zone" class="drop-zone h-40 flex flex-col items-center justify-center relative">
-                    <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
-                    <div id="upload-empty" class="text-center">
-                        <svg class="mx-auto mb-2 text-gray-600" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                        <p class="text-sm text-gray-400 font-medium">Drop image here</p>
-                        <p class="text-xs text-gray-600 mt-1">JPG · PNG · WEBP · up to 10MB</p>
-                    </div>
-                    <div id="image-preview" class="hidden w-full h-full flex items-center justify-center">
-                        <img id="preview-img" class="max-h-36 rounded-lg border border-gray-700 object-contain">
-                        <button onclick="clearImage(event)" class="absolute top-2 right-2 bg-black bg-opacity-70 text-red-400 text-xs px-2 py-1 rounded-md hover:bg-opacity-90 transition">Remove</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Model -->
-            <div class="panel p-4">
-                <p class="section-label">Model</p>
-                <div class="flex flex-col gap-2">
-                    <div class="model-card selected" onclick="selectModel(this, 'wan21')" id="model-wan21">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <div class="w-2 h-2 rounded-full status-dot" style="background: #22c55e;"></div>
-                                <span class="text-sm font-medium text-white">Seedance 2.0</span>
-                                <span class="badge" style="background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.2);">Recommended</span>
-                            </div>
-                            <div id="check-wan21" class="text-indigo-400">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-1 ml-4">Fast · High motion coherence</p>
-                    </div>
-                    <div class="model-card" onclick="selectModel(this, 'kling16')" id="model-kling16">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <div class="w-2 h-2 rounded-full" style="background: #6366f1;"></div>
-                                <span class="text-sm font-medium text-white">Kling 3.0</span>
-                                <span class="badge" style="background: rgba(99,102,241,0.12); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.2);">Pro</span>
-                            </div>
-                            <div id="check-kling16" class="text-indigo-400 hidden">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-1 ml-4">Cinematic quality · Slower · Best detail</p>
-                    </div>
-                    <div class="model-card" onclick="selectModel(this, 'sora')" id="model-sora">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <div class="w-2 h-2 rounded-full" style="background: #f59e0b;"></div>
-                                <span class="text-sm font-medium text-white">Wan 2.7</span>
-                                <span class="badge" style="background: rgba(245,158,11,0.12); color: #fcd34d; border: 1px solid rgba(245,158,11,0.2);">New</span>
-                            </div>
-                            <div id="check-sora" class="text-indigo-400 hidden">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-1 ml-4">Fast · Cheap · Latest</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Aspect Ratio -->
-            <div class="panel p-4">
-                <p class="section-label">Aspect Ratio</p>
-                <div class="grid grid-cols-2 gap-2">
-                    <button class="ratio-btn selected" onclick="selectRatio(this,'16:9')">
-                        <div class="ratio-rect mx-auto mb-1.5 rounded-sm" style="width:26px;height:15px;"></div>
-                        16:9
-                        <div class="text-gray-500 text-xs mt-0.5">Landscape</div>
-                    </button>
-                    <button class="ratio-btn" onclick="selectRatio(this,'9:16')">
-                        <div class="ratio-rect mx-auto mb-1.5 rounded-sm" style="width:14px;height:24px;"></div>
-                        9:16
-                        <div class="text-gray-500 text-xs mt-0.5">Portrait</div>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Duration & Resolution -->
-            <div class="panel p-4">
-                <div class="mb-4">
-                    <p class="section-label">Duration</p>
-                    <div class="flex gap-2">
-                        <button class="dur-btn selected" onclick="selectDur(this,'5s')">5s</button>
-                        <button class="dur-btn" onclick="selectDur(this,'8s')">8s</button>
-                    </div>
-                </div>
-                <div>
-                    <p class="section-label">Resolution</p>
-                    <div class="flex gap-2">
-                        <button class="dur-btn selected" onclick="selectRes(this,'480p')">480p</button>
-                        <button class="dur-btn" onclick="selectRes(this,'720p')">720p</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Advanced Settings -->
-            <div class="panel p-4">
-                <button onclick="toggleAdvanced()" class="flex items-center justify-between w-full">
-                    <p class="section-label mb-0" style="margin-bottom:0;">Advanced Settings</p>
-                    <svg id="adv-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-                <div id="adv-content" class="collapsible-content">
-                    <div class="mt-4 flex flex-col gap-4">
-                        <!-- Motion Intensity -->
-                        <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <label class="text-xs text-gray-400 font-medium">Motion Intensity</label>
-                                <span id="motion-val" class="text-xs text-indigo-400 font-medium">65</span>
-                            </div>
-                            <input type="range" min="0" max="100" value="65" oninput="document.getElementById('motion-val').textContent=this.value">
-                        </div>
-                        <!-- Creativity -->
-                        <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <label class="text-xs text-gray-400 font-medium">Creativity</label>
-                                <span id="creative-val" class="text-xs text-indigo-400 font-medium">7</span>
-                            </div>
-                            <input type="range" min="1" max="10" value="7" oninput="document.getElementById('creative-val').textContent=this.value">
-                        </div>
-                        <!-- Style Preset -->
-                        <div>
-                            <label class="text-xs text-gray-400 font-medium block mb-2">Style Preset</label>
-                            <select class="p-2.5 text-sm">
-                                <option>None</option>
-                                <option>Cinematic</option>
-                                <option>Anime</option>
-                                <option>3D Animation</option>
-                                <option>Photorealistic</option>
-                                <option>Vintage Film</option>
-                                <option>Watercolor</option>
-                            </select>
-                        </div>
-                        <!-- Seed -->
-                        <div>
-                            <label class="text-xs text-gray-400 font-medium block mb-2">Seed <span class="text-gray-600">(optional)</span></label>
-                            <input type="number" class="p-2.5 text-sm" placeholder="Random">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Generate -->
-            <button onclick="generateVideo()" id="generate-btn" class="gen-btn flex items-center justify-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Generate Video
-            </button>
-
+    <main class="dashboard-grid">
+      <section class="card player-card">
+        <div class="panel-head">
+          <span>Master Cinematic Player</span>
+          <span>Signal: 60 FPS</span>
         </div>
 
-        <!-- RIGHT PANEL: Output -->
-        <div class="flex-1 flex flex-col gap-4">
+        <div class="player-shell">
+          <video id="master-video" playsinline preload="metadata" poster="nugget.png">
+            <source src="Kickflip.mp4" type="video/mp4" />
+          </video>
 
-            <!-- Output panel -->
-            <div class="panel p-6 flex-1 flex flex-col" style="min-height: 480px;">
-
-                <!-- Default state -->
-                <div id="default-state" class="flex-1 flex flex-col items-center justify-center text-center py-16">
-                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-5" style="background: var(--bg-elevated); border: 1px solid var(--border);">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    </div>
-                    <p class="text-gray-300 font-medium mb-1">Your video will appear here</p>
-                    <p class="text-sm text-gray-600">Configure your settings and click Generate</p>
-                </div>
-
-                <!-- Loading state -->
-                <div id="loading-state" class="hidden flex-1 flex flex-col items-center justify-center py-8">
-                    <div class="w-full max-w-sm mb-8">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-sm text-gray-400 font-medium" id="loading-label">Initializing pipeline...</span>
-                            <span class="text-sm text-indigo-400 font-medium" id="progress-pct">0%</span>
-                        </div>
-                        <div class="w-full rounded-full overflow-hidden" style="height: 3px; background: var(--bg-elevated);">
-                            <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-3 w-full max-w-sm opacity-40">
-                        <div class="gen-card"></div>
-                        <div class="gen-card"></div>
-                        <div class="gen-card"></div>
-                    </div>
-                    <p class="text-xs text-gray-600 mt-5">Generation takes 15–45 seconds depending on model and duration</p>
-                </div>
-
-                <!-- Result state -->
-                <div id="result-state" class="hidden flex-1 flex flex-col">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span class="text-sm font-medium text-gray-200">Generation complete</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="downloadVideo()" class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                Download
-                            </button>
-                            <button onclick="generateVideo()" class="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition px-3 py-1.5 rounded-lg border border-indigo-800 hover:border-indigo-600">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                                Regenerate
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Video wrapper with Nugget Cam + bouncing nugget overlays -->
-                    <div id="video-wrapper" style="position: relative; overflow: hidden; border-radius: 12px;">
-                        <video id="rick-video" autoplay loop playsinline controls></video>
-
-                        <!-- Nugget Cam PiP -->
-                        <div id="nugget-overlay" style="position:absolute; bottom:12px; right:12px; width:160px; aspect-ratio:16/9; border-radius:8px; border:2px solid #6366f1; overflow:hidden; z-index:20; background:#000; opacity:0; display:none;">
-                            <video id="nugget-video" autoplay loop playsinline muted style="width:100%; height:100%; object-fit:cover;">
-                                <source src="Kickflip.mp4" type="video/mp4">
-                            </video>
-                            <div style="position:absolute; top:4px; left:4px; background:#6366f1; color:#fff; font-size:8px; font-weight:700; padding:1px 5px; border-radius:4px; text-transform:uppercase; letter-spacing:0.05em;">Nugget Cam</div>
-                        </div>
-
-                        <!-- Bouncing screensaver nugget -->
-                        <img id="bouncing-nugget" src="nugget.png" alt="">
-                    </div>
-
-                    <div class="flex items-center gap-4 mt-4">
-                        <div class="panel-elevated px-3 py-2 flex items-center gap-2 text-xs text-gray-500">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            <span id="result-duration">5s</span>
-                        </div>
-                        <div class="panel-elevated px-3 py-2 flex items-center gap-2 text-xs text-gray-500">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                            <span id="result-res">720p</span>
-                        </div>
-                        <div class="panel-elevated px-3 py-2 flex items-center gap-2 text-xs text-gray-500">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                            <span id="result-model">Seedance 2.0</span>
-                        </div>
-                    </div>
-                </div>
+          <div class="video-overlay">
+            <div class="status-badge"><span class="dot"></span>Status: Buffering // 60FPS</div>
+            <div class="controls">
+              <button class="ctrl-btn active" id="play-toggle" type="button">▶ Play</button>
+              <button class="ctrl-btn" id="loop-toggle" type="button">↺ Loop</button>
+              <button class="ctrl-btn" id="mute-toggle" type="button">🔊 Mute</button>
             </div>
+          </div>
 
-            <!-- Recent generations -->
-            <div class="panel p-4">
-                <div class="flex items-center justify-between mb-3">
-                    <p class="section-label mb-0" style="margin-bottom: 0;">Recent Generations</p>
-                    <span class="text-xs text-gray-600">Today</span>
+          <div class="meta-strip">
+            <div class="meta-pill">Track: Kickflip Loop</div>
+            <div class="meta-pill">Mode: Director Cut</div>
+            <div class="meta-pill" id="play-state">Idle</div>
+          </div>
+
+          <div class="mini-player-widget">
+            <div class="mini-player-shell">
+              <video id="mini-video" playsinline preload="metadata" loop muted poster="nugget.png">
+                <source src="Kickflip.mp4" type="video/mp4" />
+              </video>
+              <div class="mini-player-body">
+                <div class="mini-player-meta">
+                  <strong>GCN Music Pulse</strong>
+                  <span class="mini-player-status"><span class="live-dot"></span>Loop Live</span>
                 </div>
-                <div id="recents-grid" class="grid grid-cols-4 gap-2">
-                    <div class="gen-card flex items-center justify-center">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    </div>
-                    <div class="gen-card"></div>
-                    <div class="gen-card"></div>
-                    <div class="gen-card"></div>
+                <div class="mini-player-meta">
+                  <span>Kickflip // cue-ready</span>
+                  <span id="mini-state">Ready</span>
                 </div>
+                <div class="mini-controls">
+                  <button class="ctrl-btn" id="mini-play-toggle" type="button">▶ Play</button>
+                  <button class="ctrl-btn" id="mini-mute-toggle" type="button">🔊 Mute</button>
+                </div>
+              </div>
             </div>
-
+          </div>
         </div>
+      </section>
+
+      <aside class="card feed-card">
+        <div class="panel-head">
+          <span>Nugget Cam</span>
+          <span>Telemetry</span>
+        </div>
+
+        <div class="feed-stack">
+          <div class="feed-card-shell">
+            <div class="feed-topbar">
+              <span><span class="live-dot"></span>Live</span>
+              <span>Drone Feed</span>
+            </div>
+            <img src="nugget.png" alt="Nugget cam feed" />
+            <div class="feed-label">CAM_01 // NUGGET_TRACK</div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="card prompt-card" style="grid-column: 1 / -1;">
+        <div class="panel-head">
+          <span>Generation Prompt Deck</span>
+          <span>Input / Route</span>
+        </div>
+
+        <form id="prompt-form">
+          <label for="prompt">Mission Brief</label>
+          <textarea id="prompt" placeholder="Describe the scene, camera motion, and mood you want routed to the generator..."></textarea>
+
+          <label for="mode">Generation Mode</label>
+          <select id="mode" class="mode-select">
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+          </select>
+
+          <label for="seed">Route Tag</label>
+          <input id="seed" type="text" placeholder="copper-arc-01" />
+
+          <div class="button-row">
+            <button class="primary-btn" type="submit" id="submit-btn">Launch Generation</button>
+            <button class="secondary-btn" type="button" id="reset-btn">Reset</button>
+          </div>
+
+          <div class="feedback" id="feedback">Awaiting your next prompt.</div>
+          <div class="results-panel" id="results-panel">
+            <div class="results-placeholder">No output yet. Submit a prompt to populate the telemetry console.</div>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <div class="generation-overlay hidden" id="generation-overlay">
+    <div class="overlay-card">
+      <div class="overlay-header">
+        <span>GCN Skate / Nugget Cam</span>
+        <span id="overlay-countdown">07s</span>
+      </div>
+      <div class="overlay-video-shell">
+        <video id="overlay-video" playsinline loop muted poster="nugget.png">
+          <source src="Kickflip.mp4" type="video/mp4" />
+        </video>
+        <div class="overlay-label">CAM_01 // NUGGET_TRACK</div>
+      </div>
+      <div class="overlay-progress"><div id="overlay-progress-fill"></div></div>
+      <div class="overlay-copy" id="overlay-copy">Telemetry feed primed. The live loop will play through before the reveal.</div>
+      <div class="overlay-status"><span>Live telemetry stream</span><span id="overlay-state">buffering</span></div>
     </div>
+  </div>
 
-    <script>
-        let currentImageData = null;
-        let selectedModel = 'Seedance 2.0';
-        let selectedDuration = '5s';
-        let selectedRes = '480p';
-        let activeTab = 'text';
-
-        // ── Bouncing nugget system ────────────────────────────
-        let nuggetActive = false;
-        let nuggetSpawnTimeout = null;
-        let spawnCount = 1; // first nugget already active
-        let bonkEnabled = false;
-
-        function nextSpawnDelay() {
-            if (spawnCount < 3)  return 10000;
-            if (spawnCount < 5)  return 9000;
-            if (spawnCount < 7)  return 8000;
-            return 7000;
-        }
-
-        function scheduleNextNugget() {
-            nuggetSpawnTimeout = setTimeout(() => {
-                spawnCount++;
-                spawnExtraNugget();
-                scheduleNextNugget();
-            }, nextSpawnDelay());
-        }
-
-        const bonkAC = new (window.AudioContext || window.webkitAudioContext)();
-
-        function playBonk() {
-            if (bonkAC.state === 'suspended') bonkAC.resume();
-            const ac = bonkAC;
-            [220, 275].forEach(freq => {
-                const osc = ac.createOscillator();
-                const gain = ac.createGain();
-                osc.connect(gain); gain.connect(ac.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, ac.currentTime);
-                gain.gain.setValueAtTime(0.35, ac.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.45);
-                osc.start(ac.currentTime); osc.stop(ac.currentTime + 0.45);
-            });
-        }
-
-        function launchNugget(el) {
-            const wrapper = document.getElementById('video-wrapper');
-            let x = Math.random() * (wrapper.clientWidth  - (el.offsetWidth  || 100));
-            let y = Math.random() * (wrapper.clientHeight - (el.offsetHeight || 100));
-            let vx       = (Math.random() > 0.5 ? 1 : -1) * (1.19 + Math.random() * 0.68);
-            let vy       = (Math.random() > 0.5 ? 1 : -1) * (0.94 + Math.random() * 0.68);
-            let rot      = 0;
-            let rotSpeed = (Math.random() > 0.5 ? 1 : -1) * (0.68 + Math.random() * 1.02);
-            let lastTime = null;
-
-            function tick(timestamp) {
-                if (lastTime === null) lastTime = timestamp;
-                const delta = (timestamp - lastTime) / 16.667;
-                lastTime = timestamp;
-
-                const cw = wrapper.clientWidth  - (el.offsetWidth  || 100);
-                const ch = wrapper.clientHeight - (el.offsetHeight || 100);
-
-                x += vx * delta;
-                y += vy * delta;
-
-                if (x <= 0)  { x = 0;  vx =  Math.abs(vx); if (bonkEnabled) playBonk(); }
-                if (x >= cw) { x = cw; vx = -Math.abs(vx); if (bonkEnabled) playBonk(); }
-                if (y <= 0)  { y = 0;  vy =  Math.abs(vy); if (bonkEnabled) playBonk(); }
-                if (y >= ch) { y = ch; vy = -Math.abs(vy); if (bonkEnabled) playBonk(); }
-
-                rot += rotSpeed * delta;
-
-                el.style.left      = x + 'px';
-                el.style.top       = y + 'px';
-                el.style.transform = `rotate(${rot}deg)`;
-
-                requestAnimationFrame(tick);
-            }
-            requestAnimationFrame(tick);
-        }
-
-        function startBouncingNugget() {
-            if (nuggetActive) return;
-            nuggetActive = true;
-            launchNugget(document.getElementById('bouncing-nugget'));
-        }
-
-        function spawnExtraNugget() {
-            const wrapper = document.getElementById('video-wrapper');
-            const el = document.createElement('img');
-            el.src = 'nugget.png';
-            el.className = 'spawned-nugget';
-            el.style.cssText = 'position:absolute; width:100px; height:100px; object-fit:contain; opacity:0; pointer-events:none; z-index:10; will-change:transform,opacity,left,top;';
-            wrapper.appendChild(el);
-
-            // Fade in over 1.5 seconds
-            let fadeStart = null;
-            function fadeIn(ts) {
-                if (fadeStart === null) fadeStart = ts;
-                el.style.opacity = Math.min(1, (ts - fadeStart) / 1500);
-                if ((ts - fadeStart) < 1500) requestAnimationFrame(fadeIn);
-            }
-            requestAnimationFrame(fadeIn);
-
-            launchNugget(el);
-        }
-
-        // ── Tab switching ──────────────────────────────────────
-        function switchTab(tab) {
-            activeTab = tab;
-            const btns = document.querySelectorAll('.tab-btn');
-            btns[0].classList.toggle('active', tab === 'text');
-            btns[1].classList.toggle('active', tab === 'image');
-            document.getElementById('image-panel').classList.toggle('hidden', tab !== 'image');
-        }
-
-        // ── Model selection ────────────────────────────────────
-        const modelNames = { wan21: 'Seedance 2.0', kling16: 'Kling 3.0', sora: 'Wan 2.7' };
-        function selectModel(el, id) {
-            ['wan21','kling16','sora'].forEach(m => {
-                document.getElementById('model-' + m).classList.remove('selected');
-                document.getElementById('check-' + m).classList.add('hidden');
-            });
-            el.classList.add('selected');
-            document.getElementById('check-' + id).classList.remove('hidden');
-            selectedModel = modelNames[id];
-        }
-
-        // ── Ratio buttons ──────────────────────────────────────
-        function selectRatio(el, val) {
-            document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('selected'));
-            el.classList.add('selected');
-        }
-
-        // ── Duration buttons ───────────────────────────────────
-        function selectDur(el, val) {
-            document.querySelectorAll('.dur-btn').forEach(b => {
-                if (['5s','10s','15s'].includes(b.textContent)) b.classList.remove('selected');
-            });
-            el.classList.add('selected');
-            selectedDuration = val;
-        }
-
-        function selectRes(el, val) {
-            document.querySelectorAll('.dur-btn').forEach(b => {
-                if (['480p','720p'].includes(b.textContent)) b.classList.remove('selected');
-            });
-            el.classList.add('selected');
-            selectedRes = val;
-        }
-
-        // ── Collapsibles ───────────────────────────────────────
-        function toggleAdvanced() {
-            const c = document.getElementById('adv-content');
-            const ch = document.getElementById('adv-chevron');
-            c.classList.toggle('open');
-            ch.style.transform = c.classList.contains('open') ? 'rotate(180deg)' : '';
-        }
-
-        function toggleNeg() {
-            const c = document.getElementById('neg-content');
-            const ch = document.getElementById('neg-chevron');
-            c.classList.toggle('open');
-            ch.style.transform = c.classList.contains('open') ? 'rotate(90deg)' : '';
-        }
-
-        // ── Upload ─────────────────────────────────────────────
-        function setupUploadArea() {
-            const dropZone = document.getElementById('drop-zone');
-            const fileInput = document.getElementById('image-upload');
-
-            dropZone.addEventListener('click', (e) => {
-                if (!e.target.closest('button')) fileInput.click();
-            });
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.classList.add('dragover');
-            });
-            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('dragover');
-                const file = e.dataTransfer.files[0];
-                if (file && file.type.startsWith('image/')) handleFile(file);
-            });
-        }
-
-        function handleFile(file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                currentImageData = ev.target.result;
-                document.getElementById('upload-empty').classList.add('hidden');
-                document.getElementById('image-preview').classList.remove('hidden');
-                document.getElementById('preview-img').src = currentImageData;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
-            if (file) handleFile(file);
-        }
-
-        function clearImage(e) {
-            e.stopImmediatePropagation();
-            currentImageData = null;
-            document.getElementById('upload-empty').classList.remove('hidden');
-            document.getElementById('image-preview').classList.add('hidden');
-            document.getElementById('image-upload').value = '';
-        }
-
-        // ── Generate (the prank) ───────────────────────────────
-        const loadingSteps = [
-            [0,   'Initializing pipeline...'],
-            [18,  'Encoding prompt embeddings...'],
-            [34,  'Sampling diffusion frames...'],
-            [52,  'Applying motion coherence...'],
-            [68,  'Rendering temporal consistency...'],
-            [82,  'Upscaling & post-processing...'],
-            [95,  'Finalizing output...'],
-        ];
-
-        function generateVideo() {
-            const btn = document.getElementById('generate-btn');
-            btn.innerHTML = '<svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating...';
-            btn.disabled = true;
-
-            document.getElementById('default-state').classList.add('hidden');
-            document.getElementById('result-state').classList.add('hidden');
-            document.getElementById('loading-state').classList.remove('hidden');
-
-            // Animate progress bar through fake steps
-            let stepIndex = 0;
-            const totalTime = 5600;
-
-            function runStep() {
-                if (stepIndex >= loadingSteps.length) return;
-                const [pct, label] = loadingSteps[stepIndex];
-                document.getElementById('progress-bar').style.width = pct + '%';
-                document.getElementById('progress-pct').textContent = pct + '%';
-                document.getElementById('loading-label').textContent = label;
-                stepIndex++;
-                if (stepIndex < loadingSteps.length) {
-                    const nextDelay = totalTime / loadingSteps.length + (Math.random() * 200 - 100);
-                    setTimeout(runStep, nextDelay);
-                }
-            }
-            runStep();
-
-            setTimeout(() => {
-                document.getElementById('progress-bar').style.width = '100%';
-                document.getElementById('progress-pct').textContent = '100%';
-                document.getElementById('loading-label').textContent = 'Complete!';
-
-                setTimeout(() => {
-                    document.getElementById('loading-state').classList.add('hidden');
-                    document.getElementById('result-state').classList.remove('hidden');
-
-                    // Update result metadata
-                    document.getElementById('result-duration').textContent = selectedDuration;
-                    document.getElementById('result-res').textContent = selectedRes;
-                    document.getElementById('result-model').textContent = selectedModel;
-
-                    // Add to recents
-                    addToRecents();
-
-                    // Play the Rick
-                    const video = document.getElementById('rick-video');
-                    video.src = "https://archive.org/download/Rick_Astley_Never_Gonna_Give_You_Up/Rick_Astley_Never_Gonna_Give_You_Up.mp4";
-                    video.muted = false;
-                    video.volume = 1.0;
-                    video.play().catch(() => {});
-
-                    // Clean up any previously spawned nuggets and reset state
-                    clearTimeout(nuggetSpawnTimeout);
-                    document.querySelectorAll('.spawned-nugget').forEach(el => el.remove());
-                    spawnCount = 1;
-                    nuggetActive = false;
-                    bonkEnabled = false;
-
-                    // Show overlay elements (invisible) and start bounce immediately
-                    const nuggetOverlay = document.getElementById('nugget-overlay');
-                    const nuggetVid     = document.getElementById('nugget-video');
-                    const nuggetImg     = document.getElementById('bouncing-nugget');
-                    nuggetOverlay.style.display  = 'block';
-                    nuggetOverlay.style.opacity  = '0';
-                    nuggetImg.style.opacity      = '0';
-                    nuggetVid.play().catch(() => {});
-                    startBouncingNugget();
-
-                    // Spawn nuggets with accelerating schedule (10s → 9s → 8s → 7s forever)
-                    scheduleNextNugget();
-
-                    // timeupdate drives opacity:
-                    // Nugget Cam:  0 until 2s, fully visible at 5s  (3s fade)
-                    // Nugget char: 0 until 2s, fully visible at 10s (8s fade)
-                    video.addEventListener('timeupdate', function onTick() {
-                        const t = video.currentTime;
-                        nuggetOverlay.style.opacity = t < 2 ? '0' : Math.min(1, (t - 2) / 3).toFixed(3);
-                        nuggetImg.style.opacity     = t < 2 ? '0' : Math.min(1, (t - 2) / 8).toFixed(3);
-                        if (t >= 3) bonkEnabled = true;
-                        if (t >= 10) video.removeEventListener('timeupdate', onTick);
-                    });
-
-                    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generate Video';
-                    btn.disabled = false;
-                }, 400);
-            }, totalTime);
-        }
-
-        function addToRecents() {
-            const grid = document.getElementById('recents-grid');
-            const newCard = document.createElement('div');
-            newCard.className = 'gen-card relative overflow-hidden cursor-pointer group';
-            newCard.style.cssText = 'background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1)); border-color: rgba(99,102,241,0.2);';
-            newCard.innerHTML = `
-                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style="background:rgba(0,0,0,0.5);">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                </div>
-                <div class="absolute bottom-1 right-1 text-gray-500" style="font-size:9px;">${selectedDuration}</div>
-            `;
-            newCard.onclick = () => {
-                const v = document.getElementById('rick-video');
-                v.play().catch(()=>{});
-                document.getElementById('default-state').classList.add('hidden');
-                document.getElementById('loading-state').classList.add('hidden');
-                document.getElementById('result-state').classList.remove('hidden');
-            };
-            // Insert before the placeholder (first child)
-            grid.insertBefore(newCard, grid.firstChild);
-            // Keep max 4 cards
-            while (grid.children.length > 4) grid.removeChild(grid.lastChild);
-        }
-
-        function downloadVideo() {
-            // open the video source in a new tab — they'll figure it out
-            window.open(document.getElementById('rick-video').src, '_blank');
-        }
-
-        // ── Init ───────────────────────────────────────────────
-        window.onload = function() {
-            setupUploadArea();
-        };
-    </script>
+  <script src="app.js"></script>
 </body>
 </html>
