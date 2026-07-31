@@ -1,11 +1,13 @@
-from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from your .env file
-
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
+from mangum import Mangum
+
+load_dotenv()  # Load environment variables from your .env file
+
 from media_rotation_client import (
     execute_image_generation_with_fallback,
     execute_video_generation_with_fallback
@@ -37,3 +39,6 @@ def generate_video(payload: GenerationRequest):
 
 # Mount local static files (like your Kickflip.mp4, nugget.png, and index.html)
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
+
+# Expose handler for Vercel Serverless Functions
+handler = Mangum(app)
